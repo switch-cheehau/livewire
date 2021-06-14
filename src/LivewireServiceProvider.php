@@ -132,7 +132,7 @@ class LivewireServiceProvider extends ServiceProvider
         RouteFacade::post('/livewire/message/{name}', HttpConnectionHandler::class)
             ->name('livewire.message')
             ->domain('{site}')
-            ->middleware(config('livewire.middleware_group', ''));
+            ->middleware(config('livewire.middleware_group', ''))->where( ['site' => '[a-z0-9\.\-]+'] );
 
         RouteFacade::post('/livewire/upload-file', [FileUploadHandler::class, 'handle'])
             ->name('livewire.upload-file')
