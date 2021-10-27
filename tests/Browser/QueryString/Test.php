@@ -81,7 +81,7 @@ class Test extends TestCase
         });
     }
 
-    public function test_query_string_format_in_rfc_3986()
+    public function test_query_string_format_in_rfc_1738()
     {
         $this->browse(function (Browser $browser) {
             Livewire::visit($browser, Component::class)
@@ -89,7 +89,37 @@ class Test extends TestCase
                 ->assertSeeIn('@output', 'foo bar')
                 ->assertInputValue('@input', 'foo bar')
                 ->assertQueryStringHas('foo', 'foo bar')
-                ->assertScript('return !! window.location.search.match(/foo=foo%20bar/)')
+                ->assertScript('return !! window.location.search.match(/foo=foo\+bar/)')
+            ;
+        });
+    }
+
+    public function test_query_string_with_rfc_1738_bookmarked_url()
+    {
+        $this->browse(function (Browser $browser) {
+            $queryString = '?qux[hyphen]=quux-quuz&qux[comma]=quux,quuz&qux[ampersand]=quux%26quuz&qux[space]=quux+quuz&qux[array][]=quux&qux[array][]=quuz';
+
+            Livewire::visit($browser, Component::class, $queryString)
+                ->assertSeeIn('@qux.hyphen', 'quux-quuz')
+                ->assertSeeIn('@qux.comma', 'quux,quuz')
+                ->assertSeeIn('@qux.ampersand', 'quux&quuz')
+                ->assertSeeIn('@qux.space', 'quux quuz')
+                ->assertSeeIn('@qux.array', '["quux","quuz"]')
+            ;
+        });
+    }
+
+    public function test_query_string_with_rfc_3986_bookmarked_url_forbackwards_compatibility()
+    {
+        $this->browse(function (Browser $browser) {
+            $queryString = '?qux%5Bhyphen%5D=quux-quuz&qux%5Bcomma%5D=quux%2Cquuz&qux%5Bampersand%5D=quux%26quuz&qux%5Bspace%5D=quux%20quuz&qux%5Barray%5D%5B%5D=quux&qux%5Barray%5D%5B%5D=quuz';
+
+            Livewire::visit($browser, Component::class, $queryString)
+                ->assertSeeIn('@qux.hyphen', 'quux-quuz')
+                ->assertSeeIn('@qux.comma', 'quux,quuz')
+                ->assertSeeIn('@qux.ampersand', 'quux&quuz')
+                ->assertSeeIn('@qux.space', 'quux quuz')
+                ->assertSeeIn('@qux.array', '["quux","quuz"]')
             ;
         });
     }
@@ -172,6 +202,70 @@ class Test extends TestCase
         $this->browse(function (Browser $browser) {
             Livewire::visit($browser, ComponentWithMethodInsteadOfProperty::class)
                 ->assertQueryStringHas('foo', 'bar')
+            ;
+        });
+    }
+
+    public function test_nested_component_query_string_works_when_parent_is_not_using_query_string()
+    {
+        $this->browse(function (Browser $browser) {
+            Livewire::visit($browser, ParentComponentWithNoQueryString::class)
+                ->assertPathBeginsWith('/livewire-dusk')
+                ->waitForLivewire()->click('@toggle-nested')
+
+                // assert the path hasn't change to /livewire/message
+                ->assertPathBeginsWith('/livewire-dusk')
+                ->assertQueryStringHas('baz', 'bop')
+            ;
+        });
+    }
+
+    /** @test */
+    public function it_does_not_build_query_string_from_referer_if_it_is_coming_from_a_full_page_redirect()
+    {
+        $this->browse(function (Browser $browser) {
+            Livewire::visit($browser, RedirectLinkToQueryStringComponent::class)
+                ->assertPathBeginsWith('/livewire-dusk/Tests%5CBrowser%5CQueryString%5CRedirectLinkToQueryStringComponent')
+                ->click('@link')
+
+                ->pause(200)
+                // assert the path has changed to new component path
+                ->assertPathBeginsWith('/livewire-dusk/Tests%5CBrowser%5CQueryString%5CNestedComponent')
+                ->assertQueryStringHas('baz', 'bop')
+            ;
+        });
+    }
+
+    public function test_query_string_hooks_from_traits()
+    {
+        $this->browse(function (Browser $browser) {
+            Livewire::visit($browser, ComponentWithTraits::class)
+                ->assertSee('Post #1')
+                ->assertSee('Post #2')
+                ->assertSee('Post #3')
+                ->assertQueryStringHas('page', 1)
+                ->assertQueryStringMissing('search')
+                // Search for posts where title contains "1".
+                ->waitForLivewire()->type('@search', '1')
+                ->assertSee('Post #1')
+                ->assertSee('Post #10')
+                ->assertSee('Post #11')
+                ->assertDontSee('Post #2')
+                ->assertDontSee('Post #3')
+                ->assertQueryStringHas('search', '1')
+                ->assertQueryStringHas('page', 1)
+                // Navigate to page 2.
+                ->waitForLivewire()->click('@nextPage.before')
+                ->assertSee('Post #12')
+                ->assertSee('Post #13')
+                ->assertSee('Post #14')
+                ->assertQueryStringHas('search', '1')
+                ->assertQueryStringMissing('page')
+                // Search for posts where title contains "42".
+                ->waitForLivewire()->type('@search', '42')
+                ->assertSee('Post #42')
+                ->assertQueryStringHas('search', '42')
+                ->assertQueryStringHas('page', 1)
             ;
         });
     }

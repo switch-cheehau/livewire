@@ -2,6 +2,7 @@
 
 namespace Tests\Unit;
 
+use Illuminate\Support\Facades\Session;
 use Livewire\Component;
 use Livewire\Livewire;
 use Illuminate\Support\Facades\Route;
@@ -62,6 +63,30 @@ class RedirectTest extends TestCase
     }
 
     /** @test */
+    public function redirect_helper_using_key_value_with()
+    {
+        $component = Livewire::test(TriggersRedirectStub::class);
+
+        $component->runAction('triggerRedirectHelperUsingKeyValueWith');
+
+        $this->assertEquals(url('foo'), $component->payload['effects']['redirect']);
+
+        $this->assertEquals('livewire-is-awesome',Session::get('success'));
+    }
+
+    /** @test */
+    public function redirect_helper_using_array_with()
+    {
+        $component = Livewire::test(TriggersRedirectStub::class);
+
+        $component->runAction('triggerRedirectHelperUsingArrayWith');
+
+        $this->assertEquals(url('foo'), $component->payload['effects']['redirect']);
+
+        $this->assertEquals('livewire-is-awesome',Session::get('success'));
+    }
+
+    /** @test */
     public function redirect_facade_with_to_method()
     {
         $component = Livewire::test(TriggersRedirectStub::class);
@@ -107,6 +132,37 @@ class RedirectTest extends TestCase
         $this->assertEquals(route('foo'), $component->payload['effects']['redirect']);
     }
 
+    /** @test */
+    public function skip_render_on_redirect_by_default()
+    {
+        $component = Livewire::test(SkipsRenderOnRedirect::class);
+
+        $this->assertEquals('/local', $component->payload['effects']['redirect']);
+        $this->assertNull($component->payload['effects']['html']);
+    }
+
+    /** @test */
+    public function dont_skip_render_on_redirect_if_config_set()
+    {
+        config()->set('livewire.render_on_redirect', true);
+
+        $component = Livewire::test(SkipsRenderOnRedirect::class);
+
+        $this->assertEquals('/local', $component->payload['effects']['redirect']);
+        $this->assertStringContainsString('Render has run', $component->payload['effects']['html']);
+    }
+
+    /** @test */
+    public function manually_override_dont_skip_render_on_redirect_using_skip_render_method()
+    {
+        config()->set('livewire.render_on_redirect', true);
+
+        $component = Livewire::test(RenderOnRedirectWithSkipRenderMethod::class);
+
+        $this->assertEquals('/local', $component->payload['effects']['redirect']);
+        $this->assertNull($component->payload['effects']['html']);
+    }
+
     protected function registerNamedRoute()
     {
         Route::get('foo', function () {
@@ -140,6 +196,18 @@ class TriggersRedirectStub extends Component
     public function triggerRedirectHelper()
     {
         return redirect('foo');
+    }
+
+    public function triggerRedirectHelperUsingKeyValueWith()
+    {
+        return redirect('foo')->with('success', 'livewire-is-awesome');
+    }
+
+    public function triggerRedirectHelperUsingArrayWith()
+    {
+        return redirect('foo')->with([
+            'success' => 'livewire-is-awesome'
+        ]);
     }
 
     public function triggerRedirectFacadeUsingTo()
@@ -178,5 +246,40 @@ class TriggersRedirectOnMountStub extends Component
     public function render()
     {
         return app('view')->make('null-view');
+    }
+}
+
+class SkipsRenderOnRedirect extends Component
+{
+    public function mount()
+    {
+        return $this->redirect('/local');
+    }
+
+    public function render()
+    {
+        return <<<'HTML'
+<div>
+    Render has run
+</div>
+HTML;
+    }
+}
+
+class RenderOnRedirectWithSkipRenderMethod extends Component
+{
+    public function mount()
+    {
+        $this->skipRender();
+        return $this->redirect('/local');
+    }
+
+    public function render()
+    {
+        return <<<'HTML'
+<div>
+    Render has run
+</div>
+HTML;
     }
 }
